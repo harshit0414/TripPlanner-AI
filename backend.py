@@ -52,9 +52,10 @@ if not GROQ_API_KEY:
 # =========================
 
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=GROQ_API_KEY
-    temperature=0
+    model="openai/gpt-oss-120b",
+    api_key=GROQ_API_KEY,
+    temperature=0, 
+    max_tokens=1000
 )
 
 
@@ -112,24 +113,33 @@ def hotel_agent(state: TravelState):
 # Itinerary Agent
 # =========================
 
+
 def itinerary_agent(state: TravelState):
     prompt = f"""
-Create a complete travel itinerary.
+Create a practical, budget-friendly travel itinerary.
 
-User Query:
+User request:
 {state['user_query']}
 
-Flight Results:
-{state['flight_results']}
+Flight results (use only relevant details):
+{str(state['flight_results'])[:1500]}
 
-Hotel Results:
-{state['hotel_results']}
+Hotel results (use only relevant details):
+{str(state['hotel_results'])[:1500]}
 
-Make the itinerary practical, budget-aware, and easy to follow.
+Requirements:
+- Create a day-by-day itinerary.
+- Include flight and hotel cost estimates when available.
+- Include sightseeing and local transport.
+- Calculate the approximate total budget.
+- Mention missing prices instead of inventing them.
+- Keep the response concise and easy to follow.
 """
 
     response = llm.invoke([
-        SystemMessage(content="You are an expert travel planner."),
+        SystemMessage(
+            content="You are an expert travel planner. Be concise and accurate."
+        ),
         HumanMessage(content=prompt)
     ])
 
@@ -140,29 +150,28 @@ Make the itinerary practical, budget-aware, and easy to follow.
     }
 
 
-
 # =========================
 # Final Response Agent
 # =========================
 
+
 def final_agent(state: TravelState):
     final_prompt = f"""
-Generate the final travel response for the user.
+Generate the final travel plan using the information below.
 
 User Request:
-{state['user_query']}
+{str(state.get('user_query', ''))[:800]}
 
 Flights:
-{state['flight_results']}
+{str(state.get('flight_results', ''))[:1000]}
 
 Hotels:
-{state['hotel_results']}
+{str(state.get('hotel_results', ''))[:1000]}
 
 Itinerary:
-{state['itinerary']}
+{str(state.get('itinerary', ''))[:2500]}
 
-Format the final answer beautifully using these sections:
-
+Format the answer using these sections:
 1. Trip Summary
 2. Flight Information
 3. Hotel Suggestions
@@ -170,14 +179,19 @@ Format the final answer beautifully using these sections:
 5. Estimated Budget
 6. Final Recommendations
 
-Important:
-- Be clear and practical.
-- Mention that live flight API may not provide ticket prices if pricing is unavailable.
-- Keep the response useful for real travel planning.
+Rules:
+- Be concise, clear, and practical.
+- Do not invent flight or hotel prices.
+- Clearly identify estimated costs.
+- Respect the user's budget.
+- Avoid repeating information.
 """
 
     response = llm.invoke([
-        SystemMessage(content="You are a professional AI travel booking assistant."),
+        SystemMessage(
+            content="You are a professional travel planning assistant. "
+                    "Give accurate, concise, well-structured answers."
+        ),
         HumanMessage(content=final_prompt)
     ])
 
@@ -185,7 +199,6 @@ Important:
         "messages": [response],
         "llm_calls": state.get("llm_calls", 0) + 1
     }
-
 
 # =========================
 # Build Graph
